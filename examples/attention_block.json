@@ -1,0 +1,24 @@
+{
+  "name": "attention_block",
+  "inputs": [
+    {"name": "tokens", "shape": [2, 3, 4], "dtype": "float32"}
+  ],
+  "constants": [
+    {"name": "wq", "dtype": "float32", "value": [[0.2, -0.1, 0.3, 0.4], [0.5, 0.2, -0.3, 0.1], [-0.4, 0.6, 0.2, -0.2], [0.1, 0.3, 0.4, 0.7]]},
+    {"name": "wk", "dtype": "float32", "value": [[0.3, 0.2, -0.5, 0.1], [-0.1, 0.4, 0.6, 0.2], [0.5, -0.3, 0.2, 0.4], [0.2, 0.1, 0.3, -0.4]]},
+    {"name": "wv", "dtype": "float32", "value": [[0.1, 0.4, 0.2, -0.3], [0.3, -0.2, 0.5, 0.1], [-0.4, 0.2, 0.1, 0.6], [0.2, 0.3, -0.1, 0.4]]},
+    {"name": "scale", "dtype": "float32", "value": [[[0.5]]]}
+  ],
+  "nodes": [
+    {"op": "matmul", "inputs": ["tokens", "wq"], "outputs": ["q"]},
+    {"op": "matmul", "inputs": ["tokens", "wk"], "outputs": ["k"]},
+    {"op": "matmul", "inputs": ["tokens", "wv"], "outputs": ["v"]},
+    {"op": "transpose", "inputs": ["k"], "outputs": ["k_t"], "attrs": {"axes": [0, 2, 1]}},
+    {"op": "matmul", "inputs": ["q", "k_t"], "outputs": ["scores_raw"]},
+    {"op": "mul", "inputs": ["scores_raw", "scale"], "outputs": ["scores"]},
+    {"op": "softmax", "inputs": ["scores"], "outputs": ["weights"], "attrs": {"axis": -1}},
+    {"op": "matmul", "inputs": ["weights", "v"], "outputs": ["context"]},
+    {"op": "reshape", "inputs": ["context"], "outputs": ["flat"], "attrs": {"shape": [2, 12]}}
+  ],
+  "outputs": ["flat"]
+}

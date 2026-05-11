@@ -1,0 +1,20 @@
+{
+  "name": "gelu_mlp",
+  "inputs": [
+    {"name": "x", "shape": [4, 4], "dtype": "float32"}
+  ],
+  "constants": [
+    {"name": "w1", "dtype": "float32", "value": [[0.2, -0.4, 0.1, 0.7], [0.5, 0.1, -0.2, 0.3], [-0.3, 0.8, 0.6, -0.1], [0.4, 0.2, -0.5, 0.9]]},
+    {"name": "b1", "dtype": "float32", "value": [[0.1, -0.2, 0.0, 0.3]]},
+    {"name": "w2", "dtype": "float32", "value": [[0.3, -0.2], [0.6, 0.1], [-0.4, 0.7], [0.5, 0.2]]},
+    {"name": "b2", "dtype": "float32", "value": [[0.05, -0.05]]}
+  ],
+  "nodes": [
+    {"op": "matmul", "inputs": ["x", "w1"], "outputs": ["h_mm"]},
+    {"op": "add", "inputs": ["h_mm", "b1"], "outputs": ["h_bias"]},
+    {"op": "gelu", "inputs": ["h_bias"], "outputs": ["h"]},
+    {"op": "matmul", "inputs": ["h", "w2"], "outputs": ["out_mm"]},
+    {"op": "add", "inputs": ["out_mm", "b2"], "outputs": ["logits"]}
+  ],
+  "outputs": ["logits"]
+}

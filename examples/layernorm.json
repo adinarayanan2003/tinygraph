@@ -1,0 +1,17 @@
+{
+  "name": "layernorm_block",
+  "inputs": [
+    {"name": "x", "shape": [3, 4], "dtype": "float32"}
+  ],
+  "constants": [
+    {"name": "gamma", "dtype": "float32", "value": [1.0, 1.0, 1.0, 1.0]},
+    {"name": "beta", "dtype": "float32", "value": [0.0, 0.0, 0.0, 0.0]},
+    {"name": "scale", "dtype": "float32", "value": [[0.5, 0.5, 0.5, 0.5]]}
+  ],
+  "nodes": [
+    {"op": "layernorm", "inputs": ["x", "gamma", "beta"], "outputs": ["norm"], "attrs": {"eps": 0.00001}},
+    {"op": "mul", "inputs": ["norm", "scale"], "outputs": ["scaled"]},
+    {"op": "relu", "inputs": ["scaled"], "outputs": ["y"]}
+  ],
+  "outputs": ["y"]
+}
