@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TinyGraph Report - attention_block</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; line-height: 1.45; color: #17202a; }
+    h1, h2 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { border: 1px solid #d8dee9; border-radius: 8px; padding: 16px; background: #fbfcfe; }
+    .wide { grid-column: 1 / -1; }
+    pre { overflow-x: auto; background: #111827; color: #e5e7eb; padding: 12px; border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid #d8dee9; padding: 8px; text-align: left; }
+    th { background: #eef2f7; }
+  </style>
+</head>
+<body>
+  <h1>TinyGraph Report: attention_block</h1>
+  <div class="grid">
+    <section class="card">
+      <h2>Benchmark</h2>
+      <table>
+        <tr><th>Mode</th><th>Nodes</th><th>p50 ms</th><th>p95 ms</th><th>FLOPs</th><th>Bytes</th></tr>
+        <tr><td>numpy:naive</td><td>9</td><td>0.0371</td><td>0.0414</td><td>900</td><td>1972</td></tr>
+        <tr><td>numpy:optimized</td><td>9</td><td>0.0385</td><td>0.0882</td><td>900</td><td>1972</td></tr>
+      </table>
+      <p>Max absolute output delta: 0.00000000</p>
+    </section>
+    <section class="card">
+      <h2>Memory Plan</h2>
+      <table>
+        <tr><th>Naive peak bytes</th><th>Planned peak bytes</th></tr>
+        <tr><td>792</td><td>384</td></tr>
+      </table>
+    </section>
+  </div>
+  <h2>Passes</h2>
+  <table>
+    <tr><th>Pass</th><th>Before nodes</th><th>After nodes</th><th>Changed</th></tr>
+    <tr><td>constant_fold</td><td>9</td><td>9</td><td>False</td></tr>
+<tr><td>identity_op_removal</td><td>9</td><td>9</td><td>False</td></tr>
+<tr><td>fuse_linear_relu</td><td>9</td><td>9</td><td>False</td></tr>
+<tr><td>fuse_linear</td><td>9</td><td>9</td><td>False</td></tr>
+<tr><td>dead_node_elimination</td><td>9</td><td>9</td><td>False</td></tr>
+  </table>
+  <h2>Concepts</h2>
+  <table>
+    <tr><th>Pass</th><th>What it demonstrates</th></tr>
+    <tr><td>constant_fold</td><td>Compile-time evaluation removes work whose inputs are already known.</td></tr>
+<tr><td>identity_op_removal</td><td>No-op algebraic rewrites shrink the graph without changing outputs.</td></tr>
+<tr><td>fuse_linear_relu</td><td>Pattern fusion combines matmul, bias add, and activation into one logical op.</td></tr>
+<tr><td>fuse_linear</td><td>Pattern fusion combines matmul and bias add when there is no activation.</td></tr>
+<tr><td>dead_node_elimination</td><td>Liveness analysis removes nodes that cannot affect graph outputs.</td></tr>
+  </table>
+  
+  <h2>Backend Comparison</h2>
+  <table>
+    <tr><th>Backend</th><th>Device</th><th>Available</th><th>p50 ms</th><th>p95 ms</th><th>Max delta vs NumPy</th><th>Mean delta vs NumPy</th><th>Error</th></tr>
+    <tr><td>numpy</td><td>cpu</td><td>True</td><td>0.03675000</td><td>0.03875000</td><td>0.00000000</td><td>0.00000000</td><td></td></tr>
+<tr><td>torch</td><td>cpu</td><td>True</td><td>0.08062500</td><td>0.12054201</td><td>0.00000001</td><td>0.00000000</td><td></td></tr>
+  </table>
+
+  
+  <h2>INT8 Quantization</h2>
+  <div class="grid">
+    <section class="card">
+      <h2>Storage</h2>
+      <table>
+        <tr><th>Original constant bytes</th><th>Quantized constant bytes</th><th>Reduction</th></tr>
+        <tr><td>196</td><td>52</td><td>73.47%</td></tr>
+      </table>
+      <p>Quantized constants: wk, wq, wv</p>
+    </section>
+    <section class="card">
+      <h2>Output Drift</h2>
+      <table>
+        <tr><th>Max abs error</th><th>Mean abs error</th></tr>
+        <tr><td>0.00515458</td><td>0.00163294</td></tr>
+      </table>
+    </section>
+    <section class="wide">
+      <h2>Quantized Graph</h2>
+      <pre>Graph: attention_block
+Inputs:
+  - tokens: shape=(2, 3, 4), dtype=float32
+Constants:
+  - wq: shape=(4, 4), dtype=int8, quantized=symmetric_int8, scale=0.00551181
+  - wk: shape=(4, 4), dtype=int8, quantized=symmetric_int8, scale=0.00472441
+  - wv: shape=(4, 4), dtype=int8, quantized=symmetric_int8, scale=0.00472441
+  - scale: shape=(1, 1, 1), dtype=float32
+Nodes:
+  00. q = matmul(tokens, wq) -&gt; (2, 3, 4)
+  01. k = matmul(tokens, wk) -&gt; (2, 3, 4)
+  02. v = matmul(tokens, wv) -&gt; (2, 3, 4)
+  03. k_t = transpose(k) -&gt; (2, 4, 3)
+  04. scores_raw = matmul(q, k_t) -&gt; (2, 3, 3)
+  05. scores = mul(scores_raw, scale) -&gt; (2, 3, 3)
+  06. weights = softmax(scores) -&gt; (2, 3, 3)
+  07. context = matmul(weights, v) -&gt; (2, 3, 4)
+  08. flat = reshape(context) -&gt; (2, 12)
+Outputs: flat</pre>
+    </section>
+    <section class="wide">
+      <h2>Quantized Diagram</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:int8*)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:int8*)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:int8*)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section>
+      <h2>Before</h2>
+      <pre>Graph: attention_block
+Inputs:
+  - tokens: shape=(2, 3, 4), dtype=float32
+Constants:
+  - wq: shape=(4, 4), dtype=float32
+  - wk: shape=(4, 4), dtype=float32
+  - wv: shape=(4, 4), dtype=float32
+  - scale: shape=(1, 1, 1), dtype=float32
+Nodes:
+  00. q = matmul(tokens, wq) -&gt; (2, 3, 4)
+  01. k = matmul(tokens, wk) -&gt; (2, 3, 4)
+  02. v = matmul(tokens, wv) -&gt; (2, 3, 4)
+  03. k_t = transpose(k) -&gt; (2, 4, 3)
+  04. scores_raw = matmul(q, k_t) -&gt; (2, 3, 3)
+  05. scores = mul(scores_raw, scale) -&gt; (2, 3, 3)
+  06. weights = softmax(scores) -&gt; (2, 3, 3)
+  07. context = matmul(weights, v) -&gt; (2, 3, 4)
+  08. flat = reshape(context) -&gt; (2, 12)
+Outputs: flat</pre>
+    </section>
+    <section>
+      <h2>After</h2>
+      <pre>Graph: attention_block
+Inputs:
+  - tokens: shape=(2, 3, 4), dtype=float32
+Constants:
+  - wq: shape=(4, 4), dtype=float32
+  - wk: shape=(4, 4), dtype=float32
+  - wv: shape=(4, 4), dtype=float32
+  - scale: shape=(1, 1, 1), dtype=float32
+Nodes:
+  00. q = matmul(tokens, wq) -&gt; (2, 3, 4)
+  01. k = matmul(tokens, wk) -&gt; (2, 3, 4)
+  02. v = matmul(tokens, wv) -&gt; (2, 3, 4)
+  03. k_t = transpose(k) -&gt; (2, 4, 3)
+  04. scores_raw = matmul(q, k_t) -&gt; (2, 3, 3)
+  05. scores = mul(scores_raw, scale) -&gt; (2, 3, 3)
+  06. weights = softmax(scores) -&gt; (2, 3, 3)
+  07. context = matmul(weights, v) -&gt; (2, 3, 4)
+  08. flat = reshape(context) -&gt; (2, 12)
+Outputs: flat</pre>
+    </section>
+    <section>
+      <h2>Before Diagram</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:float32)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:float32)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:float32)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+    <section>
+      <h2>After Diagram</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:float32)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:float32)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:float32)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+    
+    <section>
+      <h2>After constant_fold</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:float32)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:float32)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:float32)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+
+
+    <section>
+      <h2>After identity_op_removal</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:float32)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:float32)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:float32)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+
+
+    <section>
+      <h2>After fuse_linear_relu</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:float32)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:float32)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:float32)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+
+
+    <section>
+      <h2>After fuse_linear</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:float32)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:float32)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:float32)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+
+
+    <section>
+      <h2>After dead_node_elimination</h2>
+      <pre>attention_block:
+  (tokens:float32, wq:float32)
+      |
+      v
+  [matmul] -&gt; (q:float32)
+  (tokens:float32, wk:float32)
+      |
+      v
+  [matmul] -&gt; (k:float32)
+  (tokens:float32, wv:float32)
+      |
+      v
+  [matmul] -&gt; (v:float32)
+  (k:float32)
+      |
+      v
+  [transpose {axes=[0, 2, 1]}] -&gt; (k_t:float32)
+  (q:float32, k_t:float32)
+      |
+      v
+  [matmul] -&gt; (scores_raw:float32)
+  (scores_raw:float32, scale:float32)
+      |
+      v
+  [mul] -&gt; (scores:float32)
+  (scores:float32)
+      |
+      v
+  [softmax {axis=-1}] -&gt; (weights:float32)
+  (weights:float32, v:float32)
+      |
+      v
+  [matmul] -&gt; (context:float32)
+  (context:float32)
+      |
+      v
+  [reshape {shape=[2, 12]}] -&gt; (flat:float32)
+  outputs: flat</pre>
+    </section>
+
+  </div>
+</body>
+</html>

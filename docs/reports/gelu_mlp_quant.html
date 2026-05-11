@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TinyGraph Report - gelu_mlp</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; line-height: 1.45; color: #17202a; }
+    h1, h2 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { border: 1px solid #d8dee9; border-radius: 8px; padding: 16px; background: #fbfcfe; }
+    .wide { grid-column: 1 / -1; }
+    pre { overflow-x: auto; background: #111827; color: #e5e7eb; padding: 12px; border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid #d8dee9; padding: 8px; text-align: left; }
+    th { background: #eef2f7; }
+  </style>
+</head>
+<body>
+  <h1>TinyGraph Report: gelu_mlp</h1>
+  <div class="grid">
+    <section class="card">
+      <h2>Benchmark</h2>
+      <table>
+        <tr><th>Mode</th><th>Nodes</th><th>p50 ms</th><th>p95 ms</th><th>FLOPs</th><th>Bytes</th></tr>
+        <tr><td>numpy:naive</td><td>5</td><td>0.0203</td><td>0.0230</td><td>232</td><td>664</td></tr>
+        <tr><td>numpy:optimized</td><td>3</td><td>0.0199</td><td>0.0217</td><td>232</td><td>472</td></tr>
+      </table>
+      <p>Max absolute output delta: 0.00000000</p>
+    </section>
+    <section class="card">
+      <h2>Memory Plan</h2>
+      <table>
+        <tr><th>Naive peak bytes</th><th>Planned peak bytes</th></tr>
+        <tr><td>160</td><td>128</td></tr>
+      </table>
+    </section>
+  </div>
+  <h2>Passes</h2>
+  <table>
+    <tr><th>Pass</th><th>Before nodes</th><th>After nodes</th><th>Changed</th></tr>
+    <tr><td>constant_fold</td><td>5</td><td>5</td><td>False</td></tr>
+<tr><td>identity_op_removal</td><td>5</td><td>5</td><td>False</td></tr>
+<tr><td>fuse_linear_relu</td><td>5</td><td>5</td><td>False</td></tr>
+<tr><td>fuse_linear</td><td>5</td><td>3</td><td>True</td></tr>
+<tr><td>dead_node_elimination</td><td>3</td><td>3</td><td>False</td></tr>
+  </table>
+  <h2>Concepts</h2>
+  <table>
+    <tr><th>Pass</th><th>What it demonstrates</th></tr>
+    <tr><td>constant_fold</td><td>Compile-time evaluation removes work whose inputs are already known.</td></tr>
+<tr><td>identity_op_removal</td><td>No-op algebraic rewrites shrink the graph without changing outputs.</td></tr>
+<tr><td>fuse_linear_relu</td><td>Pattern fusion combines matmul, bias add, and activation into one logical op.</td></tr>
+<tr><td>fuse_linear</td><td>Pattern fusion combines matmul and bias add when there is no activation.</td></tr>
+<tr><td>dead_node_elimination</td><td>Liveness analysis removes nodes that cannot affect graph outputs.</td></tr>
+  </table>
+  
+  
+  <h2>INT8 Quantization</h2>
+  <div class="grid">
+    <section class="card">
+      <h2>Storage</h2>
+      <table>
+        <tr><th>Original constant bytes</th><th>Quantized constant bytes</th><th>Reduction</th></tr>
+        <tr><td>120</td><td>48</td><td>60.00%</td></tr>
+      </table>
+      <p>Quantized constants: w1, w2</p>
+    </section>
+    <section class="card">
+      <h2>Output Drift</h2>
+      <table>
+        <tr><th>Max abs error</th><th>Mean abs error</th></tr>
+        <tr><td>0.00186121</td><td>0.00050733</td></tr>
+      </table>
+    </section>
+    <section class="wide">
+      <h2>Quantized Graph</h2>
+      <pre>Graph: gelu_mlp
+Inputs:
+  - x: shape=(4, 4), dtype=float32
+Constants:
+  - w1: shape=(4, 4), dtype=int8, quantized=symmetric_int8, scale=0.00708661
+  - b1: shape=(1, 4), dtype=float32
+  - w2: shape=(4, 2), dtype=int8, quantized=symmetric_int8, scale=0.00551181
+  - b2: shape=(1, 2), dtype=float32
+Nodes:
+  00. h_bias = fused_linear(x, w1, b1) -&gt; (4, 4)
+  01. h = gelu(h_bias) -&gt; (4, 4)
+  02. logits = fused_linear(h, w2, b2) -&gt; (4, 2)
+Outputs: logits</pre>
+    </section>
+    <section class="wide">
+      <h2>Quantized Diagram</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:int8*, b1:float32)
+      |
+      v
+  [fused_linear] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:int8*, b2:float32)
+      |
+      v
+  [fused_linear] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section>
+      <h2>Before</h2>
+      <pre>Graph: gelu_mlp
+Inputs:
+  - x: shape=(4, 4), dtype=float32
+Constants:
+  - w1: shape=(4, 4), dtype=float32
+  - b1: shape=(1, 4), dtype=float32
+  - w2: shape=(4, 2), dtype=float32
+  - b2: shape=(1, 2), dtype=float32
+Nodes:
+  00. h_mm = matmul(x, w1) -&gt; (4, 4)
+  01. h_bias = add(h_mm, b1) -&gt; (4, 4)
+  02. h = gelu(h_bias) -&gt; (4, 4)
+  03. out_mm = matmul(h, w2) -&gt; (4, 2)
+  04. logits = add(out_mm, b2) -&gt; (4, 2)
+Outputs: logits</pre>
+    </section>
+    <section>
+      <h2>After</h2>
+      <pre>Graph: gelu_mlp
+Inputs:
+  - x: shape=(4, 4), dtype=float32
+Constants:
+  - w1: shape=(4, 4), dtype=float32
+  - b1: shape=(1, 4), dtype=float32
+  - w2: shape=(4, 2), dtype=float32
+  - b2: shape=(1, 2), dtype=float32
+Nodes:
+  00. h_bias = fused_linear(x, w1, b1) -&gt; (4, 4)
+  01. h = gelu(h_bias) -&gt; (4, 4)
+  02. logits = fused_linear(h, w2, b2) -&gt; (4, 2)
+Outputs: logits</pre>
+    </section>
+    <section>
+      <h2>Before Diagram</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:float32)
+      |
+      v
+  [matmul] -&gt; (h_mm:float32)
+  (h_mm:float32, b1:float32)
+      |
+      v
+  [add] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:float32)
+      |
+      v
+  [matmul] -&gt; (out_mm:float32)
+  (out_mm:float32, b2:float32)
+      |
+      v
+  [add] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+    <section>
+      <h2>After Diagram</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:float32, b1:float32)
+      |
+      v
+  [fused_linear] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:float32, b2:float32)
+      |
+      v
+  [fused_linear] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+    
+    <section>
+      <h2>After constant_fold</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:float32)
+      |
+      v
+  [matmul] -&gt; (h_mm:float32)
+  (h_mm:float32, b1:float32)
+      |
+      v
+  [add] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:float32)
+      |
+      v
+  [matmul] -&gt; (out_mm:float32)
+  (out_mm:float32, b2:float32)
+      |
+      v
+  [add] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+
+
+    <section>
+      <h2>After identity_op_removal</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:float32)
+      |
+      v
+  [matmul] -&gt; (h_mm:float32)
+  (h_mm:float32, b1:float32)
+      |
+      v
+  [add] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:float32)
+      |
+      v
+  [matmul] -&gt; (out_mm:float32)
+  (out_mm:float32, b2:float32)
+      |
+      v
+  [add] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+
+
+    <section>
+      <h2>After fuse_linear_relu</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:float32)
+      |
+      v
+  [matmul] -&gt; (h_mm:float32)
+  (h_mm:float32, b1:float32)
+      |
+      v
+  [add] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:float32)
+      |
+      v
+  [matmul] -&gt; (out_mm:float32)
+  (out_mm:float32, b2:float32)
+      |
+      v
+  [add] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+
+
+    <section>
+      <h2>After fuse_linear</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:float32, b1:float32)
+      |
+      v
+  [fused_linear] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:float32, b2:float32)
+      |
+      v
+  [fused_linear] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+
+
+    <section>
+      <h2>After dead_node_elimination</h2>
+      <pre>gelu_mlp:
+  (x:float32, w1:float32, b1:float32)
+      |
+      v
+  [fused_linear] -&gt; (h_bias:float32)
+  (h_bias:float32)
+      |
+      v
+  [gelu] -&gt; (h:float32)
+  (h:float32, w2:float32, b2:float32)
+      |
+      v
+  [fused_linear] -&gt; (logits:float32)
+  outputs: logits</pre>
+    </section>
+
+  </div>
+</body>
+</html>
