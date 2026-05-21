@@ -1,6 +1,6 @@
 # TinyGraph
 
-TinyGraph is a developer-maintained research project for studying how neural network compilers work. It implements a small but complete compiler pipeline: graph IR, shape inference, optimization passes, quantization, backend execution, benchmarking, and HTML reports.
+Project studying how neural network compilers work. It implements a small but complete compiler pipeline: graph IR, shape inference, optimization passes, quantization, backend execution, benchmarking, and HTML reports.
 
 The project is intentionally compact. Its goal is not to replace PyTorch, XLA, TVM, or TensorRT; it is to make the core ideas behind those systems inspectable in a codebase small enough to read end to end.
 
